@@ -5,18 +5,20 @@ use crate::RTreeNode::*;
 use crate::RTreeObject;
 use itertools::iproduct;
 
-pub struct IntersectionIterator<'a, T>
+pub struct IntersectionIterator<'a, T, S>
 where
     T: RTreeObject,
+    S: RTreeObject<Envelope = T::Envelope>,
 {
-    todo_list: Vec<(&'a RTreeNode<T>, &'a RTreeNode<T>)>,
+    todo_list: Vec<(&'a RTreeNode<T>, &'a RTreeNode<S>)>,
 }
 
-impl<'a, T> IntersectionIterator<'a, T>
+impl<'a, T, S> IntersectionIterator<'a, T, S>
 where
     T: RTreeObject,
+    S: RTreeObject<Envelope = T::Envelope>,
 {
-    pub(crate) fn new(root1: &'a ParentNode<T>, root2: &'a ParentNode<T>) -> Self {
+    pub(crate) fn new(root1: &'a ParentNode<T>, root2: &'a ParentNode<S>) -> Self {
         let mut intersections = IntersectionIterator {
             todo_list: Vec::new(),
         };
@@ -24,7 +26,7 @@ where
         intersections
     }
 
-    fn push_if_intersecting(&mut self, node1: &'a RTreeNode<T>, node2: &'a RTreeNode<T>) {
+    fn push_if_intersecting(&mut self, node1: &'a RTreeNode<T>, node2: &'a RTreeNode<S>) {
         if node1.envelope().intersects(&node2.envelope()) {
             self.todo_list.push((node1, node2));
         }
@@ -33,7 +35,7 @@ where
     fn add_intersecting_children(
         &mut self,
         parent1: &'a ParentNode<T>,
-        parent2: &'a ParentNode<T>,
+        parent2: &'a ParentNode<S>,
     ) {
         if !parent1.envelope().intersects(&parent2.envelope()) {
             return;
@@ -52,17 +54,23 @@ where
     }
 }
 
-impl<'a, T> Iterator for IntersectionIterator<'a, T>
+impl<'a, T, S> Iterator for IntersectionIterator<'a, T, S>
 where
     T: RTreeObject,
+    S: RTreeObject<Envelope = T::Envelope>,
 {
-    type Item = (&'a T, &'a T);
+    type Item = (&'a T, &'a S);
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(next) = self.todo_list.pop() {
             match next {
                 (Leaf(t1), Leaf(t2)) => return Some((&t1, &t2)),
-                (leaf @ Leaf(_), Parent(p)) | (Parent(p), leaf @ Leaf(_)) => {
+                (leaf @ Leaf(_), Parent(p)) => {
+                    p.children()
+                        .iter()
+                        .for_each(|c| self.push_if_intersecting(leaf, c));
+                }
+                (Parent(p), leaf @ Leaf(_)) => {
                     p.children()
                         .iter()
                         .for_each(|c| self.push_if_intersecting(c, leaf));
