@@ -62,13 +62,14 @@ where
     }
 
     /// Creates a new AABB encompassing a collection of points.
-    pub fn from_points<'a, I>(i: I) -> Self
+    pub fn from_points<I>(i: I) -> Self
     where
-        I: IntoIterator<Item = &'a P> + 'a,
-        P: 'a,
+        I: IntoIterator,
+        I::Item: std::borrow::Borrow<P>
     {
+        use std::borrow::Borrow;
         i.into_iter()
-            .fold(Self::new_empty(), |aabb, p| aabb.add_point(p))
+            .fold(Self::new_empty(), |aabb, p| aabb.add_point(p.borrow()))
     }
 
     /// Returns the AABB that contains `self` and another point.
